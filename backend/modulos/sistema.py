@@ -17,32 +17,57 @@ class SistemaUnieTaxi:
         self.contador_id_cliente = 0
         self.clientes_viajando = set() 
 
+        # Control de tiempo para contrataciones
+        self.ultimo_refuerzo = datetime.min # Nunca se ha contratado
+        
         self.tiempo_actual = datetime(2025, 12, 12, 6, 0, 0) 
 
-        # IMPORTANTE: RLock evita bloqueos si el sistema se llama a sí mismo
         self.mutex_taxis = threading.RLock() 
         self.mutex_contabilidad = threading.RLock()
 
     def tick_tiempo(self):
         self.tiempo_actual += timedelta(minutes=20)
 
-    # --- NUEVA FUNCIÓN: EL GERENTE ---
+    # --- GERENTE INTELIGENTE (VERSIÓN 2.0) ---
     def gestionar_abastecimiento(self):
-        """Revisa si hay mucha cola y contrata taxis automáticamente."""
+        """
+        Revisa la cola y contrata refuerzos con MODERACIÓN.
+        Reglas:
+        1. Solo si hay 5+ personas esperando.
+        2. Solo si no superamos el límite de flota (ej. 10 taxis).
+        3. Solo si han pasado 5 segundos desde la última contratación.
+        """
+        LIMITE_FLOTA = 10  # <--- TU LÍMITE AQUÍ (Pon 5 si quieres ser estricto)
+        TIEMPO_ENTRE_CONTRATACIONES = 5 # Segundos reales
+        
+        ahora_real = datetime.now() # Hora real del servidor (no simulada)
+
         with self.mutex_taxis:
-            # Si hay 5 o más personas esperando, contratamos
+            # CHECK 1: ¿Ya somos demasiados?
+            if len(self.taxis) >= LIMITE_FLOTA:
+                return # No contratamos más, aunque haya cola.
+
+            # CHECK 2: ¿Acabamos de contratar a alguien? (Cooldown)
+            segundos_pasados = (ahora_real - self.ultimo_refuerzo).total_seconds()
+            if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES:
+                return # Recursos Humanos está ocupado, espera.
+
+            # CHECK 3: ¿Hay emergencia de cola?
             if len(self.cola_espera) >= 5:
-                print(f"[GERENCIA] 🚨 Detectada cola de {len(self.cola_espera)} pax. Contratando refuerzo...")
+                print(f"[GERENCIA] 🚨 Cola crítica ({len(self.cola_espera)} pax). Contratando refuerzo...")
+                
+                # Ejecutamos contratación
                 self.registrar_taxi("Refuerzo-Auto", f"SOS-{random.randint(100,999)}")
+                
+                # Marcamos la hora para el cooldown
+                self.ultimo_refuerzo = ahora_real
 
     def registrar_taxi(self, modelo, placa):
-        # NOTA: He quitado el "if random < 0.1" para que SIEMPRE funcione
         self.contador_id_taxi += 1
         nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, float(random.uniform(0, 100)), float(random.uniform(0, 100)))
         
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
-            # El nuevo taxi busca trabajo inmediatamente
             self.asignar_trabajo_de_cola(nuevo_taxi)
             
         return nuevo_taxi
@@ -61,7 +86,6 @@ class SistemaUnieTaxi:
         distancia_minima = float('inf')
 
         with self.mutex_taxis:
-            # 1. BUSCAR TAXI LIBRE
             for taxi in self.taxis:
                 if taxi.estado == "LIBRE":
                     dist = math.sqrt((taxi.x - float(ox))**2 + (taxi.y - float(oy))**2)
@@ -69,7 +93,6 @@ class SistemaUnieTaxi:
                         distancia_minima = dist
                         mejor_taxi = taxi
             
-            # 2. ASIGNAR O ENCOLAR
             if mejor_taxi:
                 self._asignar_viaje(mejor_taxi, cliente_id, ox, oy, dx, dy)
                 return mejor_taxi
@@ -77,7 +100,6 @@ class SistemaUnieTaxi:
                 solicitud = {"cliente_id": cliente_id, "ox": ox, "oy": oy, "dx": dx, "dy": dy}
                 self.cola_espera.append(solicitud)
                 self.clientes_viajando.add(cliente_id)
-                # Ya NO contratamos aquí, lo hace el 'gestionar_abastecimiento'
                 return "EN_COLA"
 
     def _asignar_viaje(self, taxi, cliente_id, ox, oy, dx, dy):
@@ -90,7 +112,7 @@ class SistemaUnieTaxi:
 
     def asignar_trabajo_de_cola(self, taxi):
         if self.cola_espera:
-            siguiente = self.cola_espera.pop(0) # Sacamos al primero
+            siguiente = self.cola_espera.pop(0) 
             print(f"[COLA] Taxi {taxi.id} rescata al Cliente {siguiente['cliente_id']}")
             self._asignar_viaje(
                 taxi, siguiente["cliente_id"], 
