@@ -36,17 +36,25 @@ def motor_fisica():
                 try:
                     llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
                     if llegado:
-                        with sistema.mutex_taxis:
-                            taxi.estado = "LIBRE"
-                            taxi.destino_actual = None
+                        # 1. FINALIZAMOS EL VIAJE ACTUAL (Cobrar, liberar cliente)
                         sistema.finalizar_viaje(taxi, random.uniform(10, 50))
+                        
+                        with sistema.mutex_taxis:
+                            # 2. ¿HAY COLA? EL TAXI NO DESCANSA
+                            tiene_trabajo_nuevo = sistema.asignar_trabajo_de_cola(taxi)
+                            
+                            if not tiene_trabajo_nuevo:
+                                # Si no hay cola, entonces sí descansa
+                                taxi.estado = "LIBRE"
+                                taxi.destino_actual = None
+                            
                 except Exception as e:
                     print(f"Error taxi {taxi.id}: {e}")
         
         except Exception as e:
             print(f"Error motor: {e}")
         
-        time.sleep(0.5)
+        time.sleep(0.05)
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
@@ -68,12 +76,12 @@ def simulador_clientes():
             # Calculamos qué tan probable es reutilizar a alguien basado en cuántos somos.
             # - Si somos 0: prob_reuso = 0.0 (0%) -> Todo nuevo
             # - Si somos 25: prob_reuso = 0.5 (50%) -> Mitad y mitad
-            # - Si somos 50+: prob_reuso = 0.95 (95%) -> Casi siempre reusamos
+            # - Si somos 50+: prob_reuso = 0.99 (99%) -> Casi siempre reusamos
             
             if total_clientes == 0:
                 prob_reuso = 0
             else:
-                prob_reuso = min(0.95, total_clientes / POBLACION_IDEAL)
+                prob_reuso = min(0.99, total_clientes / POBLACION_IDEAL)
 
             # 3. TOMA DE DECISIÓN
             usar_existente = False
@@ -133,15 +141,18 @@ class ConfigSimulacion(BaseModel):
 
 @app.get("/estado")
 def ver_estado():
+    # ... (Cálculo mejor taxi igual) ...
     mejor_taxi = None
     if sistema.taxis:
         mejor_taxi_obj = max(sistema.taxis, key=lambda t: t.ganancias)
         if mejor_taxi_obj.ganancias > 0:
             mejor_taxi = {"id": mejor_taxi_obj.id, "modelo": mejor_taxi_obj.modelo, "ganancias": round(mejor_taxi_obj.ganancias, 2)}
-    
+
     return {
         "taxis": sistema.taxis,
         "clientes": sistema.clientes, 
+        # Añadimos info de la cola para depuración si quieres
+        "cola_espera": len(sistema.cola_espera), 
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
         "viajes": sistema.viajes_totales,
         "mejor_taxi": mejor_taxi,
@@ -165,9 +176,15 @@ def borrar_taxi(taxi_id: int):
 @app.post("/solicitar_viaje")
 def solicitar(datos: SolicitudViaje):
     res = sistema.procesar_solicitud(datos.cliente_id, datos.origen_x, datos.origen_y, datos.destino_x, datos.destino_y)
+    
     if res == "ID_INVALIDO": return {"resultado": "Error: ID inválido."}
     if res == "CLIENTE_OCUPADO": return {"resultado": "Cliente ocupado."}
-    if res == "SIN_TAXIS": return {"resultado": "No hay taxis."}
+    
+    # NUEVO: Gestión de respuesta "EN_COLA"
+    if res == "EN_COLA": 
+        return {"resultado": "⚠️ No hay taxis. Estás en cola de espera."}
+    
+    # Si devuelve objeto taxi
     return {"resultado": "Asignado", "taxi_id": res.id}
 
 @app.post("/simulacion/config")
