@@ -5,22 +5,37 @@ const API_URL = "http://127.0.0.1:8000"
 const mapSize = 500;
 const scale = 5;
 
-// Estilos
+// Estilos Generales
 const panelStyle = { border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#f9f9f9', height: '100%', display: 'flex', flexDirection: 'column' }
 const statBox = { background: 'white', padding: '15px', borderRadius: '5px', border: '1px solid #eee', marginBottom: '15px' }
 const btnStyle = { width: '100%', padding: '10px', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold', marginBottom: '5px' }
 const tabActive = { padding: '10px 20px', cursor: 'pointer', background: '#333', color: 'white', border: 'none', borderRadius: '5px 5px 0 0', fontWeight: 'bold' }
 const tabInactive = { padding: '10px 20px', cursor: 'pointer', background: '#eee', color: '#666', border: 'none', borderRadius: '5px 5px 0 0' }
 
-// ESTILO PARA EL RELOJ
-const clockStyle = {
-  position: 'absolute', top: 10, right: 10,
-  background: '#222', color: '#0f0', 
-  padding: '10px 20px', borderRadius: '5px',
-  fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold',
-  border: '2px solid #555', zIndex: 1000, boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
+// ESTILO NUEVO PARA EL RELOJ (Barra superior)
+const clockContainerStyle = {
+  display: 'flex', 
+  justifyContent: 'space-between', 
+  alignItems: 'center', 
+  marginBottom: '10px',
+  background: '#333', 
+  color: 'white', 
+  padding: '10px', 
+  borderRadius: '5px'
 }
 
+const digitalClockStyle = {
+  fontFamily: 'monospace', 
+  fontSize: '20px', 
+  color: '#0f0', 
+  fontWeight: 'bold',
+  background: '#000',
+  padding: '2px 10px',
+  borderRadius: '3px',
+  border: '1px solid #555'
+}
+
+// COMPONENTES DE VISTA
 const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi, simulacionActiva, intervalo, actualizarSimulacion }) => (
   <div style={panelStyle}>
     <h3>👮‍♂️ Panel de Administración</h3>
@@ -32,13 +47,13 @@ const VistaAdmin = ({ infoEmpresa, taxis, mejorTaxi, registrarTaxi, eliminarTaxi
           {simulacionActiva ? '🛑 DETENER SIMULACIÓN' : '🤖 INICIAR SIMULACIÓN AUTO'}
         </button>
         <div style={{marginTop: 10}}>
-          <label style={{fontSize: 12, fontWeight: 'bold', color: '#555'}}>Velocidad de Generación:</label>
+          <label style={{fontSize: 12, fontWeight: 'bold', color: '#555'}}>Velocidad:</label>
           <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-            <span style={{fontSize: 12}}>🚀 Rápido</span>
+            <span style={{fontSize: 12}}>🚀</span>
             <input type="range" min="0.5" max="5.0" step="0.5" value={intervalo} onChange={(e) => actualizarSimulacion({ intervalo: parseFloat(e.target.value) })} style={{flex: 1}}/>
-            <span style={{fontSize: 12}}>🐢 Lento</span>
+            <span style={{fontSize: 12}}>🐢</span>
           </div>
-          <p style={{textAlign: 'center', fontSize: 11, color: '#666', margin: 0}}>(Nuevo cliente cada <strong>{intervalo}s</strong>)</p>
+          <p style={{textAlign: 'center', fontSize: 11, color: '#666', margin: 0}}>(1 cliente / {intervalo}s)</p>
         </div>
       </div>
       <hr style={{margin: '10px 0', border: '0', borderTop: '1px solid #eee'}}/>
@@ -109,9 +124,7 @@ export default function App() {
   const [mensaje, setMensaje] = useState("Sistema iniciado.")
   const [miIdTaxi, setMiIdTaxi] = useState(null)
   const [miIdCliente, setMiIdCliente] = useState(1)
-  
-  // ESTADO PARA EL RELOJ
-  const [tiempoSimulado, setTiempoSimulado] = useState("Cargando...")
+  const [tiempoSimulado, setTiempoSimulado] = useState("00:00")
 
   useEffect(() => {
     const intervaloId = setInterval(async () => {
@@ -121,21 +134,14 @@ export default function App() {
         setInfoEmpresa({ ganancia: res.data.empresa_ganancia, viajes: res.data.viajes })
         setMejorTaxi(res.data.mejor_taxi)
         setSimulacionActiva(res.data.simulacion_activa)
-        
-        // RECIBIMOS LA HORA DEL SERVIDOR
         setTiempoSimulado(res.data.tiempo_simulado)
-        
       } catch (e) { console.error("Conectando...") }
     }, 500)
     return () => clearInterval(intervaloId)
   }, [])
 
-  const registrarTaxi = async () => {
-    try { await axios.post(`${API_URL}/taxis`, { modelo: "Toyota", placa: `ABC-${Math.floor(Math.random() * 999)}` }); setMensaje("Admin: Taxi creado.") } catch (e) { setMensaje("Error al crear taxi.") }
-  }
-  const eliminarTaxi = async (id) => {
-    try { await axios.delete(`${API_URL}/taxis/${id}`); setMensaje(`Admin: Taxi ${id} eliminado.`) } catch (error) { alert("No se pudo eliminar: " + error.response.data.detail) }
-  }
+  const registrarTaxi = async () => { try { await axios.post(`${API_URL}/taxis`, { modelo: "Toyota", placa: `ABC-${Math.floor(Math.random() * 999)}` }); setMensaje("Admin: Taxi creado.") } catch (e) { setMensaje("Error al crear taxi.") } }
+  const eliminarTaxi = async (id) => { try { await axios.delete(`${API_URL}/taxis/${id}`); setMensaje(`Admin: Taxi ${id} eliminado.`) } catch (error) { alert("No se pudo eliminar: " + error.response.data.detail) } }
   const actualizarSimulacion = async (config) => {
     if (config.activa !== undefined) setSimulacionActiva(config.activa)
     if (config.intervalo !== undefined) setIntervalo(config.intervalo)
@@ -151,10 +157,11 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: 'Arial', padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ fontFamily: 'Arial', padding: '20px', maxWidth: '950px', margin: '0 auto' }}>
       
-      {/* HEADER TÍTULO Y PESTAÑAS */}
+      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #ccc', paddingBottom: '10px' }}>
+        <h2 style={{margin:0, color: '#d4af37'}}>UNIE TAXI</h2>
         <div style={{display:'flex', gap:'10px'}}>
           <button onClick={() => setRolActual('ADMIN')} style={rolActual === 'ADMIN' ? tabActive : tabInactive}>👮‍♂️ ADMIN</button>
           <button onClick={() => setRolActual('CLIENTE')} style={rolActual === 'CLIENTE' ? tabActive : tabInactive}>🙋‍♂️ CLIENTE</button>
@@ -162,33 +169,41 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', height: '600px' }}>
-        <div style={{ width: '350px', height: '100%' }}>
+      <div style={{ display: 'flex', gap: '20px' }}>
+        {/* COLUMNA IZQUIERDA (CONTROLES) */}
+        <div style={{ width: '350px', height: '600px' }}>
           {rolActual === 'ADMIN' && <VistaAdmin infoEmpresa={infoEmpresa} taxis={taxis} mejorTaxi={mejorTaxi} registrarTaxi={registrarTaxi} eliminarTaxi={eliminarTaxi} simulacionActiva={simulacionActiva} intervalo={intervalo} actualizarSimulacion={actualizarSimulacion} />}
           {rolActual === 'CLIENTE' && <VistaCliente miIdCliente={miIdCliente} setMiIdCliente={setMiIdCliente} solicitarViaje={solicitarViaje} mensaje={mensaje} />}
           {rolActual === 'TAXI' && <VistaTaxista taxis={taxis} miIdTaxi={miIdTaxi} setMiIdTaxi={setMiIdTaxi} />}
           <div style={{marginTop: 10, fontSize: 12, color: '#999'}}>Log: {mensaje}</div>
         </div>
 
-        <div style={{ position: 'relative', width: mapSize, height: mapSize, background: '#eee', border: '3px solid #333' }}>
-          <span style={{position:'absolute', top: 5, left: 5, color: '#888', fontWeight: 'bold'}}>MAPA CIUDAD (Simulación)</span>
+        {/* COLUMNA DERECHA (MAPA + RELOJ) */}
+        <div style={{ width: mapSize }}>
           
-          {/* EL RELOJ VISIBLE */}
-          <div style={clockStyle}>
-            {tiempoSimulado}
+          {/* BARRA SUPERIOR CON RELOJ */}
+          <div style={clockContainerStyle}>
+             <span>MAPA DE LA CIUDAD</span>
+             <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
+               <span style={{fontSize:12, color:'#ccc'}}>HORA SIMULADA:</span>
+               <div style={digitalClockStyle}>{tiempoSimulado}</div>
+             </div>
           </div>
 
-          {taxis.map(taxi => (
-            <div key={taxi.id} style={{
-                position: 'absolute', left: taxi.x * scale, top: taxi.y * scale, width: '18px', height: '18px',
-                background: taxi.estado === 'LIBRE' ? '#28a745' : '#dc3545', borderRadius: '50%',
-                border: miIdTaxi == taxi.id && rolActual === 'TAXI' ? '3px solid blue' : '2px solid white',
-                boxShadow: '0 2px 5px rgba(0,0,0,0.3)', transition: 'all 0.5s linear', zIndex: miIdTaxi == taxi.id ? 100 : 1
-              }} title={`Taxi ${taxi.id}`}>
-              {rolActual === 'TAXI' && miIdTaxi == taxi.id && <span style={{position:'absolute', top:-20, left:-10, background:'blue', color:'white', padding:'2px 5px', borderRadius:4, fontSize:10}}>Yo</span>}
-            </div>
-          ))}
+          <div style={{ position: 'relative', width: mapSize, height: mapSize, background: '#eee', border: '3px solid #333' }}>
+            {taxis.map(taxi => (
+              <div key={taxi.id} style={{
+                  position: 'absolute', left: taxi.x * scale, top: taxi.y * scale, width: '18px', height: '18px',
+                  background: taxi.estado === 'LIBRE' ? '#28a745' : '#dc3545', borderRadius: '50%',
+                  border: miIdTaxi == taxi.id && rolActual === 'TAXI' ? '3px solid blue' : '2px solid white',
+                  boxShadow: '0 2px 5px rgba(0,0,0,0.3)', transition: 'all 0.5s linear', zIndex: miIdTaxi == taxi.id ? 100 : 1
+                }} title={`Taxi ${taxi.id}`}>
+                {rolActual === 'TAXI' && miIdTaxi == taxi.id && <span style={{position:'absolute', top:-20, left:-10, background:'blue', color:'white', padding:'2px 5px', borderRadius:4, fontSize:10}}>Yo</span>}
+              </div>
+            ))}
+          </div>
         </div>
+
       </div>
     </div>
   )
