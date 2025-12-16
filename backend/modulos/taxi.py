@@ -13,18 +13,22 @@ class Taxi:
         self.destino_actual = None
         self.cliente_actual = None
 
-    def actualizar_posicion(self, destino_x, destino_y, velocidad=2):
+def actualizar_posicion(self, destino_x, destino_y, velocidad=2):
         """Simula el movimiento del taxi hacia un destino."""
         dx = destino_x - self.x
         dy = destino_y - self.y
         distancia = (dx**2 + dy**2)**0.5
         
-        if distancia < 1:
+        # CORRECCIÓN ANTI-VIBRACIÓN:
+        # Si la distancia restante es menor que el paso que voy a dar (velocidad),
+        # significa que llegaría o me pasaría en este turno. 
+        # Así que fuerzo la llegada exacta ("snap").
+        if distancia <= velocidad:
             self.x = destino_x
             self.y = destino_y
             return True # Ha llegado
         else:
-            # Avanzar un paso hacia el destino
+            # Si estoy lejos, avanzo normal
             self.x += (dx / distancia) * velocidad
             self.y += (dy / distancia) * velocidad
             return False # Sigue en camino
