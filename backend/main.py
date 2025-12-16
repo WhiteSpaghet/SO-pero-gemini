@@ -51,37 +51,45 @@ def motor_fisica():
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO 2: SIMULADOR DE CLIENTES MEJORADO ---
+# --- HILO 2: SIMULADOR INTELIGENTE (AUTO-ESCALADO) ---
 def simulador_clientes():
     while True:
         if SIMULACION_ACTIVA:
             cliente_id_seleccionado = None
             
-            # 1. OBTENER LISTA DE QUIENES ESTÁN LIBRES
-            # Filtramos todos los clientes que NO están viajando ahora mismo
+            # 1. FILTRAR: ¿Quién está libre ahora mismo?
             clientes_libres = [c for c in sistema.clientes if c.id not in sistema.clientes_viajando]
             
-            # 2. DECISIÓN: ¿REUTILIZAR O CREAR NUEVO?
-            # Si hay gente libre, lanzamos una moneda:
-            # - 70% de probabilidad: Reutilizamos a alguien aleatorio (para subir sus viajes)
-            # - 30% de probabilidad: Creamos uno nuevo (para traer gente nueva al sistema)
             usar_existente = False
             
-            if clientes_libres and random.random() < 0.7:
+            # 2. TOMA DE DECISIÓN
+            if len(clientes_libres) == 0:
+                # CASO A: ¡Saturación! Todos están viajando.
+                # Generamos cliente nuevo OBLIGATORIAMENTE para no detener el ritmo.
+                usar_existente = False
+                print("[AUTO] ⚠️ Todos los clientes están ocupados. Generando cliente de refuerzo...")
+            
+            elif random.random() < 0.7:
+                # CASO B: Hay gente libre y el azar (70%) dice que reutilicemos.
                 usar_existente = True
             
+            else:
+                # CASO C: Hay gente libre, pero el azar (30%) dice que entre gente nueva.
+                usar_existente = False
+
+            # 3. EJECUCIÓN
             if usar_existente:
-                # Elegimos uno AL AZAR (Ya no es siempre el primero)
+                # Elegimos uno al azar de los libres
                 cliente = random.choice(clientes_libres)
                 cliente_id_seleccionado = cliente.id
-                print(f"[AUTO] Cliente recurrente {cliente.nombre} (ID {cliente.id}) pide viaje.")
+                print(f"[AUTO] 🔄 Cliente recurrente {cliente.nombre} (ID {cliente.id}) pide viaje.")
             else:
                 # Creamos uno nuevo
                 nuevo = sistema.registrar_cliente(f"Bot_{random.randint(1000,9999)}", "VISA")
                 cliente_id_seleccionado = nuevo.id
-                print(f"[AUTO] ¡Cliente NUEVO registrado! ID {nuevo.id}.")
+                print(f"[AUTO] ✨ Cliente NUEVO registrado: {nuevo.nombre} (ID {nuevo.id}).")
 
-            # 3. LANZAR SOLICITUD
+            # 4. LANZAR SOLICITUD AL SISTEMA
             sistema.procesar_solicitud(
                 cliente_id_seleccionado,
                 random.uniform(0, 100), random.uniform(0, 100),
