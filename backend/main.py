@@ -20,13 +20,11 @@ sistema = SistemaUnieTaxi()
 SIMULACION_ACTIVA = False
 INTERVALO_GENERACION = 3.0
 
-# --- HILO 1: MOTOR FÍSICO + RELOJ ---
+# --- HILO 1: MOTOR FÍSICO ---
 def motor_fisica():
     while True:
         try:
-            # 1. AVANZAMOS EL RELOJ DEL SISTEMA
-            # Solo avanza si la simulación está activa (opcional, o siempre)
-            # Vamos a hacer que avance siempre para que se vea vivo
+            # Avanzamos el reloj siempre para dar vida
             sistema.tick_tiempo() 
 
             with sistema.mutex_taxis:
@@ -49,22 +47,39 @@ def motor_fisica():
         except Exception as e:
             print(f"Error motor: {e}")
         
-        time.sleep(0.5) # Cada 0.5 seg reales = 2 min simulados
+        time.sleep(0.5)
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
 
-# --- HILO 2: SIMULADOR ---
+# --- HILO 2: SIMULADOR INTELIGENTE (REUTILIZA CLIENTES) ---
 def simulador_clientes():
     while True:
         if SIMULACION_ACTIVA:
-            nuevo_cliente = sistema.registrar_cliente(f"Bot_{random.randint(100,999)}", "VISA")
+            cliente_id_seleccionado = None
+            
+            # 1. INTENTAR REUTILIZAR CLIENTE LIBRE
+            # Recorremos la lista de clientes registrados
+            for cliente in sistema.clientes:
+                # Si el ID NO está en el conjunto de "gente viajando", está libre
+                if cliente.id not in sistema.clientes_viajando:
+                    cliente_id_seleccionado = cliente.id
+                    print(f"[AUTO] Cliente {cliente.nombre} (ID {cliente.id}) solicita nuevo viaje.")
+                    break # Encontramos uno, dejamos de buscar
+            
+            # 2. SI NO HAY NADIE LIBRE, CREAMOS UNO NUEVO
+            if cliente_id_seleccionado is None:
+                nuevo = sistema.registrar_cliente(f"Bot_{random.randint(100,999)}", "VISA")
+                cliente_id_seleccionado = nuevo.id
+                print(f"[AUTO] Todos ocupados. Creando nuevo Cliente {nuevo.id}.")
+
+            # 3. LANZAR SOLICITUD
             sistema.procesar_solicitud(
-                nuevo_cliente.id,
+                cliente_id_seleccionado,
                 random.uniform(0, 100), random.uniform(0, 100),
                 random.uniform(0, 100), random.uniform(0, 100)
             )
-            print(f"[AUTO] Cliente {nuevo_cliente.id} generado.")
+            
             time.sleep(INTERVALO_GENERACION) 
         else:
             time.sleep(1)
@@ -72,7 +87,7 @@ def simulador_clientes():
 hilo_simulacion = threading.Thread(target=simulador_clientes, daemon=True)
 hilo_simulacion.start()
 
-# --- MODELOS ---
+# --- DTOs y ENDPOINTS (Sin cambios) ---
 class TaxiRegistro(BaseModel):
     modelo: str
     placa: str
@@ -88,8 +103,6 @@ class ConfigSimulacion(BaseModel):
     activa: Optional[bool] = None
     intervalo: Optional[float] = None
 
-# --- ENDPOINTS ---
-
 @app.get("/estado")
 def ver_estado():
     mejor_taxi = None
@@ -100,7 +113,6 @@ def ver_estado():
     
     return {
         "taxis": sistema.taxis,
-        # AHORA ENVIAMOS LOS CLIENTES TAMBIÉN
         "clientes": sistema.clientes, 
         "empresa_ganancia": round(sistema.ganancia_empresa, 2),
         "viajes": sistema.viajes_totales,
