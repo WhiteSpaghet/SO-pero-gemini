@@ -28,38 +28,35 @@ class SistemaUnieTaxi:
     def tick_tiempo(self):
         self.tiempo_actual += timedelta(minutes=20)
 
-    # --- GERENTE INTELIGENTE (VERSIÓN 2.0) ---
+    # --- GERENTE MUY RÁPIDO (2 por segundo) ---
     def gestionar_abastecimiento(self):
         """
-        Revisa la cola y contrata refuerzos con MODERACIÓN.
+        Revisa la cola y contrata refuerzos RÁPIDAMENTE.
         Reglas:
         1. Solo si hay 5+ personas esperando.
-        2. Solo si no superamos el límite de flota (ej. 10 taxis).
-        3. Solo si han pasado 5 segundos desde la última contratación.
+        2. Límite de flota ampliado a 20.
+        3. Velocidad: 2 taxis por segundo (0.5s de espera).
         """
-        LIMITE_FLOTA = 10  # <--- TU LÍMITE AQUÍ (Pon 5 si quieres ser estricto)
-        TIEMPO_ENTRE_CONTRATACIONES = 5 # Segundos reales
+        LIMITE_FLOTA = 20 
+        TIEMPO_ENTRE_CONTRATACIONES = 0.5 # <--- 0.5s = 2 taxis por segundo
         
-        ahora_real = datetime.now() # Hora real del servidor (no simulada)
+        ahora_real = datetime.now() 
 
         with self.mutex_taxis:
-            # CHECK 1: ¿Ya somos demasiados?
+            # CHECK 1: Límite de flota
             if len(self.taxis) >= LIMITE_FLOTA:
-                return # No contratamos más, aunque haya cola.
+                return 
 
-            # CHECK 2: ¿Acabamos de contratar a alguien? (Cooldown)
+            # CHECK 2: Cooldown (Ahora es solo medio segundo)
             segundos_pasados = (ahora_real - self.ultimo_refuerzo).total_seconds()
             if segundos_pasados < TIEMPO_ENTRE_CONTRATACIONES:
-                return # Recursos Humanos está ocupado, espera.
+                return 
 
-            # CHECK 3: ¿Hay emergencia de cola?
+            # CHECK 3: Emergencia de cola
             if len(self.cola_espera) >= 5:
-                print(f"[GERENCIA] 🚨 Cola crítica ({len(self.cola_espera)} pax). Contratando refuerzo...")
+                print(f"[GERENCIA] ⚡ Contratación Exprés. Cola: {len(self.cola_espera)}")
                 
-                # Ejecutamos contratación
-                self.registrar_taxi("Refuerzo-Auto", f"SOS-{random.randint(100,999)}")
-                
-                # Marcamos la hora para el cooldown
+                self.registrar_taxi("Refuerzo-Flash", f"R-{random.randint(100,999)}")
                 self.ultimo_refuerzo = ahora_real
 
     def registrar_taxi(self, modelo, placa):
