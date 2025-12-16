@@ -20,44 +20,33 @@ sistema = SistemaUnieTaxi()
 # --- ESTADO DE SIMULACIÓN ---
 SIMULACION_ACTIVA = False
 
-# --- HILO 1: MOTOR FÍSICO (SIMPLIFICADO) ---
 def motor_fisica():
-    print("--- MOTOR FÍSICO INICIADO ---")
+    print("--- MOTOR DE FISICA ARRANCADO ---")
     while True:
         try:
-            time.sleep(0.5) # Ritmo de actualización
+            time.sleep(0.5) # Pausa para ver el movimiento
             
-            # Usamos el bloqueo RLock
             with sistema.mutex_taxis:
-                # Buscamos quién necesita moverse
-                taxis_ocupados = [t for t in sistema.taxis if t.estado == "OCUPADO"]
+                # Filtramos solo los que tienen trabajo
+                taxis_moviendose = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
                 
-                if not taxis_ocupados:
-                    continue # Nadie se mueve, seguimos esperando
-
-                velocidad = 8 if SIMULACION_ACTIVA else 3
+                # Velocidad: Si simulamos, van rápido (8), si no, normal (2)
+                velocidad_actual = 8.0 if SIMULACION_ACTIVA else 2.0
                 
-                for taxi in taxis_ocupados:
-                    if not taxi.destino_actual:
-                        # Si está ocupado pero no tiene destino (error raro), lo liberamos
-                        taxi.estado = "LIBRE"
-                        continue
-
+                for taxi in taxis_moviendose:
                     dx, dy = taxi.destino_actual
                     
-                    # Movemos
-                    llegado = taxi.actualizar_posicion(dx, dy, velocidad)
+                    # Llamamos al nuevo método LERP
+                    llegado = taxi.actualizar_posicion(dx, dy, velocidad_actual)
                     
                     if llegado:
-                        # Llegada exitosa
+                        print(f"Taxi {taxi.id} completó viaje.")
                         taxi.estado = "LIBRE"
                         taxi.destino_actual = None
-                        costo = random.uniform(10, 50)
-                        sistema.finalizar_viaje(taxi, costo)
-                        print(f"Taxi {taxi.id} llegó a su destino. Ganó ${round(costo, 2)}")
+                        sistema.finalizar_viaje(taxi, random.uniform(10, 50))
 
         except Exception as e:
-            print(f"!!! ERROR CRITICO MOTOR: {e}")
+            print(f"Error en Loop Motor: {e}")
 
 # --- HILO 2: GENERADOR AUTOMÁTICO DE CLIENTES (Modo Simulación) ---
 def simulador_clientes():

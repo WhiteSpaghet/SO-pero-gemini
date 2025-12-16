@@ -16,34 +16,36 @@ class Taxi:
 
     def actualizar_posicion(self, destino_x, destino_y, velocidad=2):
         try:
-            # 1. Protección contra datos corruptos (NaN)
-            if math.isnan(self.x) or math.isnan(self.y):
-                self.x = float(destino_x)
-                self.y = float(destino_y)
-                return True
+            # 1. Convertimos a float por seguridad
+            tx, ty = float(self.x), float(self.y)
+            dx, dy = float(destino_x), float(destino_y)
 
-            dx = float(destino_x) - self.x
-            dy = float(destino_y) - self.y
-            distancia = math.sqrt(dx**2 + dy**2)
-            
-            # 2. Si ya estamos ahí, terminar.
-            if distancia < 0.5: # Margen de error un poco más grande
-                self.x = destino_x
-                self.y = destino_y
-                return True
+            # 2. Calculamos distancia total restante
+            cateto_x = dx - tx
+            cateto_y = dy - ty
+            distancia_total = (cateto_x**2 + cateto_y**2)**0.5
 
-            # 3. Lógica de "salto" si estamos cerca (Anti-vibración)
-            if distancia <= velocidad:
-                self.x = destino_x
-                self.y = destino_y
-                return True
+            # 3. SI YA LLEGAMOS (Distancia casi cero):
+            if distancia_total < 0.5: 
+                self.x = dx
+                self.y = dy
+                return True # ¡Llegó!
+
+            # 4. MOVIMIENTO SUAVE (Interpolación Lineal)
+            # Calculamos qué porcentaje del camino podemos recorrer en este paso.
+            # Si velocidad > distancia, el ratio es 1.0 (el 100% del camino, llegar directo).
+            # Si no, es una fracción (ej. 0.1 para avanzar un 10%).
             
-            # 4. Movimiento normal
-            factor = velocidad / distancia
-            self.x += dx * factor
-            self.y += dy * factor
-            return False
+            avance = min(velocidad, distancia_total) # Nunca avanzamos más de lo que falta
+            ratio = avance / distancia_total
+
+            # Aplicamos el movimiento
+            self.x = tx + (cateto_x * ratio)
+            self.y = ty + (cateto_y * ratio)
+
+            # Si el ratio fue 1.0 (o muy cerca), es que hemos llegado
+            return ratio >= 1.0
 
         except Exception as e:
-            print(f"[ERROR MATH TAXI {self.id}]: {e}")
-            return True # Ante la duda, llegamos al destino
+            print(f"Error Math Taxi {self.id}: {e}")
+            return True # En caso de error, forzamos llegada para no bloquear
