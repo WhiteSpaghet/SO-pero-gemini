@@ -9,7 +9,7 @@ class SistemaUnieTaxi:
     def __init__(self):
         self.taxis = []     
         self.clientes = []  
-        self.cola_espera = [] # <--- NUEVA COLA
+        self.cola_espera = []
         
         self.ganancia_empresa = 0.0
         self.viajes_totales = 0
@@ -19,23 +19,30 @@ class SistemaUnieTaxi:
 
         self.tiempo_actual = datetime(2025, 12, 12, 6, 0, 0) 
 
-        self.mutex_taxis = threading.RLock()
+        # IMPORTANTE: RLock evita bloqueos si el sistema se llama a sí mismo
+        self.mutex_taxis = threading.RLock() 
         self.mutex_contabilidad = threading.RLock()
 
     def tick_tiempo(self):
         self.tiempo_actual += timedelta(minutes=20)
 
+    # --- NUEVA FUNCIÓN: EL GERENTE ---
+    def gestionar_abastecimiento(self):
+        """Revisa si hay mucha cola y contrata taxis automáticamente."""
+        with self.mutex_taxis:
+            # Si hay 5 o más personas esperando, contratamos
+            if len(self.cola_espera) >= 5:
+                print(f"[GERENCIA] 🚨 Detectada cola de {len(self.cola_espera)} pax. Contratando refuerzo...")
+                self.registrar_taxi("Refuerzo-Auto", f"SOS-{random.randint(100,999)}")
+
     def registrar_taxi(self, modelo, placa):
-        # Eliminamos el fallo aleatorio para que el refuerzo siempre funcione
-        # if random.random() < 0.1: return None 
-        
+        # NOTA: He quitado el "if random < 0.1" para que SIEMPRE funcione
         self.contador_id_taxi += 1
         nuevo_taxi = Taxi(self.contador_id_taxi, modelo, placa, float(random.uniform(0, 100)), float(random.uniform(0, 100)))
+        
         with self.mutex_taxis:
             self.taxis.append(nuevo_taxi)
-            
-            # ¡IMPORTANTE! El taxi nuevo nace LIBRE. 
-            # Debemos ver si hay gente esperando para asignarle trabajo ya.
+            # El nuevo taxi busca trabajo inmediatamente
             self.asignar_trabajo_de_cola(nuevo_taxi)
             
         return nuevo_taxi
@@ -62,62 +69,41 @@ class SistemaUnieTaxi:
                         distancia_minima = dist
                         mejor_taxi = taxi
             
-            # 2. SI HAY TAXI -> ASIGNAR
+            # 2. ASIGNAR O ENCOLAR
             if mejor_taxi:
                 self._asignar_viaje(mejor_taxi, cliente_id, ox, oy, dx, dy)
                 return mejor_taxi
-            
-            # 3. SI NO HAY TAXI -> A LA COLA
             else:
-                solicitud = {
-                    "cliente_id": cliente_id,
-                    "ox": ox, "oy": oy,
-                    "dx": dx, "dy": dy
-                }
+                solicitud = {"cliente_id": cliente_id, "ox": ox, "oy": oy, "dx": dx, "dy": dy}
                 self.cola_espera.append(solicitud)
-                self.clientes_viajando.add(cliente_id) # Lo marcamos como ocupado (esperando)
-                
-                print(f"[COLA] Cliente {cliente_id} en espera. Total en cola: {len(self.cola_espera)}")
-
-                # --- 4. LÓGICA DE REFUERZO AUTOMÁTICO ---
-                if len(self.cola_espera) >= 5:
-                    print(f"[SISTEMA] 🚨 ALERTA: {len(self.cola_espera)} clientes esperando. CONTRATANDO REFUERZO.")
-                    self.registrar_taxi("Refuerzo-Auto", f"SOS-{random.randint(100,999)}")
-
+                self.clientes_viajando.add(cliente_id)
+                # Ya NO contratamos aquí, lo hace el 'gestionar_abastecimiento'
                 return "EN_COLA"
 
-    # Método auxiliar para no repetir código
     def _asignar_viaje(self, taxi, cliente_id, ox, oy, dx, dy):
         taxi.estado = "OCUPADO"
         taxi.destino_actual = (float(dx), float(dy))
-        taxi.x = float(ox) # Teletransporte al cliente (simplificación)
+        taxi.x = float(ox) 
         taxi.y = float(oy)
         taxi.cliente_actual = cliente_id 
         self.clientes_viajando.add(cliente_id)
 
-    # NUEVO: Método que llama el taxi cuando queda libre
     def asignar_trabajo_de_cola(self, taxi):
         if self.cola_espera:
-            # Sacamos al primero de la cola (FIFO)
-            siguiente = self.cola_espera.pop(0)
-            print(f"[COLA] Asignando pendiente (Cliente {siguiente['cliente_id']}) al Taxi {taxi.id}")
-            
-            # Como el cliente ya estaba en 'clientes_viajando' (esperando), 
-            # no hace falta añadirlo, pero _asignar_viaje lo hace por si acaso.
+            siguiente = self.cola_espera.pop(0) # Sacamos al primero
+            print(f"[COLA] Taxi {taxi.id} rescata al Cliente {siguiente['cliente_id']}")
             self._asignar_viaje(
-                taxi, 
-                siguiente["cliente_id"], 
+                taxi, siguiente["cliente_id"], 
                 siguiente["ox"], siguiente["oy"], 
                 siguiente["dx"], siguiente["dy"]
             )
-            return True # Se asignó trabajo
-        return False # No había nadie esperando
+            return True
+        return False
 
     def finalizar_viaje(self, taxi, costo):
         if taxi.cliente_actual:
             cliente_obj = next((c for c in self.clientes if c.id == taxi.cliente_actual), None)
             if cliente_obj: cliente_obj.viajes += 1 
-
             if taxi.cliente_actual in self.clientes_viajando:
                 self.clientes_viajando.remove(taxi.cliente_actual)
             taxi.cliente_actual = None

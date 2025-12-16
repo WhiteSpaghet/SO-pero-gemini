@@ -20,12 +20,16 @@ sistema = SistemaUnieTaxi()
 SIMULACION_ACTIVA = False
 INTERVALO_GENERACION = 3.0
 
-# --- HILO 1: MOTOR FÍSICO ---
+# --- HILO 1: MOTOR FÍSICO + GERENTE ---
 def motor_fisica():
     while True:
         try:
             sistema.tick_tiempo() 
+            
+            # --- 1. EL GERENTE REVISA LA COLA ---
+            sistema.gestionar_abastecimiento()
 
+            # --- 2. MOVIMIENTO DE TAXIS ---
             with sistema.mutex_taxis:
                 taxis_activos = [t for t in sistema.taxis if t.estado == "OCUPADO" and t.destino_actual]
             
@@ -36,15 +40,13 @@ def motor_fisica():
                 try:
                     llegado = taxi.actualizar_posicion(dest_x, dest_y, velocidad)
                     if llegado:
-                        # 1. FINALIZAMOS EL VIAJE ACTUAL (Cobrar, liberar cliente)
+                        # Finalizamos viaje
                         sistema.finalizar_viaje(taxi, random.uniform(10, 50))
                         
+                        # El taxi busca trabajo inmediatamente en la cola
                         with sistema.mutex_taxis:
-                            # 2. ¿HAY COLA? EL TAXI NO DESCANSA
-                            tiene_trabajo_nuevo = sistema.asignar_trabajo_de_cola(taxi)
-                            
-                            if not tiene_trabajo_nuevo:
-                                # Si no hay cola, entonces sí descansa
+                            trabajo_nuevo = sistema.asignar_trabajo_de_cola(taxi)
+                            if not trabajo_nuevo:
                                 taxi.estado = "LIBRE"
                                 taxi.destino_actual = None
                             
@@ -54,7 +56,7 @@ def motor_fisica():
         except Exception as e:
             print(f"Error motor: {e}")
         
-        time.sleep(0.05)
+        time.sleep(0.05) # Velocidad x10
 
 hilo_motor = threading.Thread(target=motor_fisica, daemon=True)
 hilo_motor.start()
